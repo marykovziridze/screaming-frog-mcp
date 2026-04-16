@@ -1064,8 +1064,23 @@ def get_export_reference() -> str:
 
 def main():
     """Run the Screaming Frog MCP server."""
-    _initialize()
-    mcp.run()
+    import sys
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        stream=sys.stderr,
+    )
+    logger.info("Starting Screaming Frog MCP server")
+    logger.info("Platform: %s", platform.system())
+    logger.info("SF_CLI_PATH: %s", SF_CLI_PATH)
+    logger.info("SF CLI exists: %s", os.path.exists(SF_CLI_PATH))
+    try:
+        _initialize()
+        logger.info("Initialization complete, starting MCP transport")
+        mcp.run()
+    except Exception:
+        logger.exception("Fatal error during startup")
+        raise
 
 
 if __name__ == "__main__":

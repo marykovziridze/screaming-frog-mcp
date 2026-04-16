@@ -29,5 +29,8 @@ dependencies = [
 [project.scripts]
 screaming-frog-mcp = "screaming_frog_mcp:main"
 
+[tool.setuptools.packages.find]
+include = ["screaming_frog_mcp*"]
+
 [project.urls]
 Homepage = "https://github.com/marykovziridze/screaming-frog-mcp"
