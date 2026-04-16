@@ -13,6 +13,7 @@ import csv
 import ipaddress
 import logging
 import os
+import platform
 import re
 import shutil
 import subprocess
@@ -32,10 +33,25 @@ logger = logging.getLogger(__name__)
 
 # --- Configuration ---
 
-SF_CLI_PATH = os.getenv(
-    "SF_CLI_PATH",
-    "/Applications/Screaming Frog SEO Spider.app/Contents/MacOS/ScreamingFrogSEOSpiderLauncher",
-)
+def _default_sf_cli_path() -> str:
+    """Return the platform-specific default path for the Screaming Frog CLI."""
+    if platform.system() == "Windows":
+        # Standard install location on Windows
+        candidates = [
+            Path(os.environ.get("PROGRAMFILES(X86)", "C:\\Program Files (x86)"))
+            / "Screaming Frog SEO Spider" / "ScreamingFrogSEOSpiderCli.exe",
+            Path(os.environ.get("PROGRAMFILES", "C:\\Program Files"))
+            / "Screaming Frog SEO Spider" / "ScreamingFrogSEOSpiderCli.exe",
+        ]
+        for candidate in candidates:
+            if candidate.exists():
+                return str(candidate)
+        # Return the most common path even if not found yet
+        return str(candidates[0])
+    else:
+        return "/Applications/Screaming Frog SEO Spider.app/Contents/MacOS/ScreamingFrogSEOSpiderLauncher"
+
+SF_CLI_PATH = os.getenv("SF_CLI_PATH", _default_sf_cli_path())
 
 SF_DATA_DIR = Path.home() / ".ScreamingFrogSEOSpider" / "ProjectInstanceData"
 TEMP_EXPORT_BASE = Path.home() / ".cache" / "sf-mcp" / "exports"
@@ -208,18 +224,20 @@ def _cleanup_completed_crawls():
         if proc.returncode is not None:
             completed.append(cid)
             continue
-        # Try a non-blocking waitpid to catch processes the event loop missed
-        try:
-            pid, status = os.waitpid(proc.pid, os.WNOHANG)
-            if pid != 0:
-                # Process has exited — update returncode manually
-                proc._returncode = os.waitstatus_to_exitcode(status)
+        # Try a non-blocking waitpid to catch processes the event loop missed.
+        # os.WNOHANG is Unix-only; on Windows, skip this check and rely on
+        # asyncio's returncode (which is sufficient for the crawl_status flow).
+        if hasattr(os, "WNOHANG"):
+            try:
+                pid, status = os.waitpid(proc.pid, os.WNOHANG)
+                if pid != 0:
+                    proc._returncode = os.waitstatus_to_exitcode(status)
+                    completed.append(cid)
+            except ChildProcessError:
+                # Process already reaped
                 completed.append(cid)
-        except ChildProcessError:
-            # Process already reaped
-            completed.append(cid)
-        except Exception:
-            pass
+            except Exception:
+                pass
     for cid in completed:
         del _running_crawls[cid]
 
